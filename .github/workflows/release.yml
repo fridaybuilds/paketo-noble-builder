@@ -1,0 +1,170 @@
+name: Release
+
+# Publishes a new revision of every snapshot whose builder.toml differs from its latest revision (or that has none
+# yet): an immutable <snapshot>-r<N> image, the moving <snapshot> tag, and the snapshot's GitHub release with its
+# notes, revisions.json and builder-r<N>.toml. Then points `latest` at the newest published snapshot and attaches the
+# published snapshots.json to its release, which is what fridaybuilds reads.
+
+on:
+  push:
+    branches: [main]
+    paths:
+    - snapshots.json
+    - overlay.toml
+    - .github/workflows/release.yml
+  workflow_dispatch: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  PACK_VERSION: "0.40.9"
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    outputs:
+      enabled: ${{ steps.plan.outputs.enabled }}
+      image: ${{ steps.plan.outputs.image }}
+      snapshots: ${{ steps.plan.outputs.snapshots }}
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    - name: Plan revisions
+      id: plan
+      env:
+        GH_TOKEN: ${{ github.token }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      run: |
+        echo "image=$(sed -n 's/^image = "\(.*\)"$/\1/p' overlay.toml)" >> "$GITHUB_OUTPUT"
+
+        if [ -z "${DOCKERHUB_TOKEN}" ]; then
+          echo "::notice::The DOCKERHUB_TOKEN secret isn't set, nothing is published"
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+          echo "snapshots=[]" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+        go build -o noble-builder ./cmd/noble-builder
+
+        plan='[]'
+        for name in $(jq -r '.snapshots[].name' snapshots.json); do
+          ./noble-builder builder -snapshot "${name}" > builder.toml
+
+          revisions="$(gh release download "${name}" --pattern revisions.json --output - 2>/dev/null || echo '[]')"
+          last="$(jq 'map(.revision) | max // 0' <<< "${revisions}")"
+          if [ "${last}" -gt 0 ] \
+            && gh release download "${name}" --pattern "builder-r${last}.toml" --output last.toml --clobber \
+            && cmp -s builder.toml last.toml; then
+            continue
+          fi
+
+          echo "${name}: publishing revision $((last + 1))"
+          plan="$(jq -c --arg name "${name}" --argjson revision "$((last + 1))" '. + [{name: $name, revision: $revision}]' <<< "${plan}")"
+        done
+
+        echo "snapshots=${plan}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish ${{ matrix.snapshot.name }}-r${{ matrix.snapshot.revision }}
+    needs: plan
+    if: needs.plan.outputs.snapshots != '[]'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        snapshot: ${{ fromJSON(needs.plan.outputs.snapshots) }}
+    env:
+      IMAGE: ${{ needs.plan.outputs.image }}
+      NAME: ${{ matrix.snapshot.name }}
+      REVISION: ${{ matrix.snapshot.revision }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    - uses: buildpacks/github-actions/setup-pack@v6.1.1
+      with:
+        pack-version: ${{ env.PACK_VERSION }}
+
+    - uses: docker/login-action@v4
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME || 'fridaybuilds' }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Create builder
+      run: |
+        go build -o noble-builder ./cmd/noble-builder
+        ./noble-builder builder -snapshot "${NAME}" > "builder-r${REVISION}.toml"
+
+        # experimental enables multi-arch builders from the [[targets]] in builder.toml
+        pack config experimental true
+        pack builder create "${IMAGE}:${NAME}-r${REVISION}" --config "builder-r${REVISION}.toml" --publish
+
+        docker buildx imagetools create --tag "${IMAGE}:${NAME}" "${IMAGE}:${NAME}-r${REVISION}"
+
+    - name: Update release
+      run: |
+        digest="$(docker buildx imagetools inspect "${IMAGE}:${NAME}-r${REVISION}" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+
+        gh release download "${NAME}" --pattern revisions.json --output previous.json 2>/dev/null || echo '[]' > previous.json
+        ./noble-builder revision -snapshot "${NAME}" -number "${REVISION}" -commit "${GITHUB_SHA}" -digest "${digest}" > revision.json
+        jq -s '.[0] + [.[1]]' previous.json revision.json > revisions.json
+        ./noble-builder notes -snapshot "${NAME}" -revisions revisions.json > notes.md
+
+        if gh release view "${NAME}" > /dev/null 2>&1; then
+          gh release edit "${NAME}" --notes-file notes.md
+          gh release upload "${NAME}" revisions.json "builder-r${REVISION}.toml" --clobber
+        else
+          gh release create "${NAME}" --title "${NAME}" --target "${GITHUB_SHA}" --notes-file notes.md --latest=false \
+            revisions.json "builder-r${REVISION}.toml"
+        fi
+
+  latest:
+    name: Update latest
+    needs: [plan, publish]
+    if: always() && needs.plan.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE: ${{ needs.plan.outputs.image }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: docker/login-action@v4
+      with:
+        username: ${{ vars.DOCKERHUB_USERNAME || 'fridaybuilds' }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Point latest at the newest published snapshot
+      run: |
+        # Only list the snapshots that have a release, so fridaybuilds never picks an image that wasn't published
+        published="$(gh release list --limit 1000 --json tagName --jq '[.[].tagName]')"
+        jq --argjson published "${published}" '.snapshots |= map(select(.name as $name | $published | index($name)))' \
+          snapshots.json > published.json
+
+        newest="$(jq -r '.snapshots[-1].name // empty' published.json)"
+        if [ -z "${newest}" ]; then
+          echo "::warning::No snapshot is published yet"
+          exit 0
+        fi
+
+        docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}:${newest}"
+        gh release edit "${newest}" --latest
+
+        cp published.json snapshots.json
+        gh release upload "${newest}" snapshots.json --clobber

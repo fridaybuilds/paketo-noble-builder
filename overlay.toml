@@ -1,0 +1,57 @@
+# What the fridaybuilds noble builders add to the Paketo noble builder.
+#
+# The build/run images, lifecycle, targets and buildpacks come from the upstream builder.toml at the release pinned
+# in snapshots.json (`base`), which `resolve` moves to the latest upstream release.
+
+base = "paketo-buildpacks/ubuntu-noble-builder"
+base_path = "builders/builder/builder.toml"
+image = "docker.io/fridaybuilds/paketo-noble-builder"
+description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache HTTPD, Go, Java, Java Native Image, .NET, NGINX, Node.js, PHP, Procfile, Python, and Ruby, for every language version that had a noble build"
+
+# The upstream builder's target arches are used unless `arches` lists a subset of them. Fewer arches let older
+# releases in, since buildpacks only gained arm64 builds over time (e.g. arches = ["amd64"]).
+
+# Stacks with `track` follow the releases of their composite buildpack: `resolve` picks the fewest snapshots in time
+# that together offer every version of the tracked dependency that ever had a build for the noble stack, and each
+# snapshot is published as its own builder image.
+#
+# Stacks that are in the upstream builder can only be listed with `track`. Other stacks get their own order group at
+# `position` ("first", "last", "before:<buildpack id>" or "after:<buildpack id>"), and need either `track` or a fixed
+# `version`.
+[[stacks]]
+  id = "paketo-buildpacks/ruby"
+  image = "docker.io/paketobuildpacks/ruby"
+  track = "ruby"
+
+[[stacks]]
+  id = "paketo-buildpacks/go"
+  image = "docker.io/paketobuildpacks/go"
+  track = "go"
+
+[[stacks]]
+  id = "paketo-buildpacks/python"
+  image = "docker.io/paketobuildpacks/python"
+  track = "python"
+
+[[stacks]]
+  id = "paketo-buildpacks/php"
+  image = "docker.io/paketobuildpacks/php"
+  track = "php"
+
+[[stacks]]
+  id = "paketo-buildpacks/nodejs"
+  image = "docker.io/paketobuildpacks/nodejs"
+  track = "node"
+
+# Buildpacks added as optional to the start of order groups, in this order.
+# Without `groups` they go into every group, otherwise only into the groups containing one of the listed ids.
+[[prepend]]
+  id = "paketo-buildpacks/apt"
+  image = "docker.io/paketobuildpacks/apt"
+  version = "0.3.0"
+
+[[prepend]]
+  id = "com.github.tashows.vips"
+  image = "docker.io/tashows/vips-buildpack"
+  version = "0.0.4"
+  groups = ["paketo-buildpacks/ruby", "paketo-buildpacks/nodejs", "paketo-buildpacks/python"]

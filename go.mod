@@ -1,0 +1,16 @@
+module github.com/fridaybuilds/paketo-noble-builder
+
+go 1.26.0
+
+require (
+	github.com/BurntSushi/toml v1.6.0
+	github.com/onsi/gomega v1.42.1
+	github.com/sclevine/spec v1.4.0
+)
+
+require (
+	github.com/google/go-cmp v0.7.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
+)
