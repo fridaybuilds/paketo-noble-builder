@@ -26,7 +26,6 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
-      LOCK: ${{ runner.temp }}/snapshots.json
     steps:
     - name: Check Docker Hub credentials
       id: credentials
@@ -55,13 +54,13 @@ jobs:
       if: steps.credentials.outputs.enabled == 'true'
       run: |
         go build -o noble-builder ./cmd/noble-builder
-        ./noble-builder resolve -lock "${LOCK}"
+        ./noble-builder resolve -lock "${RUNNER_TEMP}/snapshots.json"
 
         published="$(mktemp)"
         if [ -f snapshots.json ]; then
           jq -r '.snapshots[].version' snapshots.json > "${published}"
         fi
-        versions="$(jq -r '.snapshots[].version' "${LOCK}" | grep -vxF -f "${published}" || true)"
+        versions="$(jq -r '.snapshots[].version' "${RUNNER_TEMP}/snapshots.json" | grep -vxF -f "${published}" || true)"
         echo "versions=$(echo ${versions})" >> "$GITHUB_OUTPUT"
 
     - uses: buildpacks/github-actions/setup-pack@v6.1.1
@@ -89,7 +88,7 @@ jobs:
 
         for version in ${VERSIONS}; do
           echo "::group::${version}"
-          ./noble-builder prepare -lock "${LOCK}" -version "${version}"
+          ./noble-builder prepare -lock "${RUNNER_TEMP}/snapshots.json" -version "${version}"
           pack builder create "${image}:${version}" --config builder.toml --publish
 
           git add builder.toml snapshots.json SUPPORTED_VERSIONS.md
