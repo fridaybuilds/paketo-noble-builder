@@ -23,5 +23,7 @@ jobs:
 
     - run: go test ./...
 
-    - name: Check generated files
-      run: go run ./cmd/noble-builder -check
+    - name: Check overlay.toml against the latest upstream builder
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: go run ./cmd/noble-builder check

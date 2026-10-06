@@ -15,7 +15,7 @@ It is built for the fridaybuilds platform, but works with any CNB platform.
 
 ## Usage
 
-Find the builder version that has your language version in [SUPPORTED_VERSIONS.md](./SUPPORTED_VERSIONS.md), then:
+Find the builder version that has your language version (see [Finding a version](#finding-a-version)), then:
 
 ```bash
 pack build my-app --builder docker.io/fridaybuilds/paketo-noble-builder:<version>
@@ -33,16 +33,46 @@ of the language buildpacks, and their release notes say which date they are a sn
 Every version is a commit on `main` and a tag with:
 
 - [builder.toml](./builder.toml): the builder of that version,
-- [snapshots.json](./snapshots.json): every version up to that one, with the upstream release it is based on, the
-  tracked buildpack versions and the language versions they provide,
-- [SUPPORTED_VERSIONS.md](./SUPPORTED_VERSIONS.md): every language version, with the newest builder version that has
-  it.
+- [snapshots.json](./snapshots.json): every version up to that one (see below).
 
 Each version also has a [GitHub release](https://github.com/fridaybuilds/paketo-noble-builder/releases) with its
 language versions, the changes since the previous version, its buildpacks and its images.
 
 The app's run image, `ubuntu-noble-run:latest`, is picked when the app is built, so apps built with an older builder
 version still run on the latest run image.
+
+## Finding a version
+
+[snapshots.json](./snapshots.json) lists every published version, oldest first:
+
+```json
+{
+  "snapshots": [
+    {
+      "version": "0.1.12",
+      "date": "2026-10-02",
+      "base": "v0.0.204",
+      "buildpacks": { "paketo-buildpacks/ruby": "3.1.1", "...": "..." },
+      "languages": { "ruby": ["3.3.11", "3.3.12", "3.4.9", "..."], "node": ["..."] }
+    }
+  ]
+}
+```
+
+- `version`: the builder version, which is also its image tag and git tag.
+- `date`: the date of the Paketo language buildpack releases it is a snapshot of.
+- `base`: the [Paketo noble builder](https://github.com/paketo-buildpacks/ubuntu-noble-builder/releases) release it
+  is based on.
+- `buildpacks`: the versions of the tracked language buildpacks.
+- `languages`: the language versions those provide on noble, for amd64 and arm64 (`ruby`, `go`, `python`, `php`,
+  `node`).
+
+For example, the newest builder version that has Ruby 3.3.11:
+
+```bash
+curl -s https://raw.githubusercontent.com/fridaybuilds/paketo-noble-builder/main/snapshots.json \
+  | jq -r '[.snapshots[] | select(.languages.ruby | index("3.3.11"))] | last | .version'
+```
 
 ## How it works
 
@@ -61,8 +91,8 @@ image, the commit and tag, and the GitHub release. It then points `latest` at th
 
 ```bash
 go test ./...
-go run ./cmd/noble-builder resolve -lock /tmp/snapshots.json   # needs network; set GITHUB_TOKEN to avoid rate limits
-go run ./cmd/noble-builder                                     # regenerate SUPPORTED_VERSIONS.md
+go run ./cmd/noble-builder check                               # check overlay.toml against the latest upstream builder
+go run ./cmd/noble-builder resolve -lock /tmp/snapshots.json   # the versions the next release would publish
 pack builder create my-builder --config builder.toml
 ```
 

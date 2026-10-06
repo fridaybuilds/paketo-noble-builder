@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 )
@@ -32,41 +31,6 @@ func languages(overlay Overlay) []string {
 		}
 	}
 	return tracked
-}
-
-// SupportedVersions renders SUPPORTED_VERSIONS.md: for every language version, the newest builder version that has it.
-func SupportedVersions(overlay Overlay, lock Lock) []byte {
-	var buf bytes.Buffer
-	w := func(format string, args ...any) { fmt.Fprintf(&buf, format, args...) }
-
-	w("<!-- Generated from snapshots.json by `go run ./cmd/noble-builder`. DO NOT EDIT. -->\n\n")
-	w("# Supported language versions\n\n")
-	w("Each language version is listed with the newest builder version that has it, to use as\n")
-	w("`%s:<version>`. Older patch versions are kept for apps that pin them, but upgrading to the newest patch\n", overlay.Image)
-	w("of a minor version is recommended.\n")
-
-	for _, language := range languages(overlay) {
-		newest := map[string]string{}
-		for _, snapshot := range lock.Snapshots {
-			for _, version := range snapshot.Languages[language] {
-				newest[version] = snapshot.Version
-			}
-		}
-		if len(newest) == 0 {
-			continue
-		}
-
-		versions := slices.Collect(maps.Keys(newest))
-		sortVersions(versions)
-		slices.Reverse(versions)
-
-		w("\n## %s\n\n| Version | Builder version |\n| --- | --- |\n", languageName(language))
-		for _, version := range versions {
-			w("| %s | `%s` |\n", version, newest[version])
-		}
-	}
-
-	return buf.Bytes()
 }
 
 // Notes renders the release notes of lock.Snapshots[i], whose builder is builder. previous is the builder of the

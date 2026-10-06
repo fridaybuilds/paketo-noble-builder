@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -198,14 +197,6 @@ func testDocs(t *testing.T, context spec.G, it spec.S) {
 			},
 		}
 	)
-
-	it("lists every language version with the newest builder version that has it", func() {
-		docs := string(SupportedVersions(overlay, lock))
-
-		Expect(docs).To(ContainSubstring("## Ruby\n\n| Version | Builder version |\n| --- | --- |\n| 3.4.1 | `0.1.1` |\n| 3.4.0 | `0.1.1` |\n| 3.3.0 | `0.1.0` |\n"))
-		Expect(docs).To(ContainSubstring("## Node.js\n\n| Version | Builder version |\n| --- | --- |\n| 22.1.0 | `0.1.1` |\n"))
-		Expect(strings.Index(docs, "## Ruby")).To(BeNumerically("<", strings.Index(docs, "## Node.js")))
-	})
 
 	context("Notes", func() {
 		var builder, previous Builder

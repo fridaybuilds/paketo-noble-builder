@@ -1,14 +1,14 @@
 // Command noble-builder manages the fridaybuilds noble builder versions. Run it from the repository root.
 //
-// snapshots.json lists the published versions. builder.toml, snapshots.json and SUPPORTED_VERSIONS.md at the root are
-// those of the newest one, and every version is a commit and a tag with them.
+// snapshots.json lists the published versions, and builder.toml is the builder of the newest one. Every version is a
+// commit and a tag with them.
 //
 //	noble-builder resolve [-lock <file>] [-v]   add the versions to publish to snapshots.json (or write it to <file>)
 //	noble-builder prepare -lock <file> -version <version>
 //	                                            write the root files of a version from a resolved snapshots.json
 //	noble-builder notes -lock <file> -version <version> [-builder <builder.toml>] [-previous <builder.toml>]
 //	                                            print the release notes of a version
-//	noble-builder [-check]                      write SUPPORTED_VERSIONS.md, or check that it is up to date
+//	noble-builder check                         check overlay.toml against the latest upstream builder
 package main
 
 import (
@@ -24,16 +24,15 @@ import (
 )
 
 const (
-	overlayFile   = "overlay.toml"
-	lockFile      = "snapshots.json"
-	builderFile   = "builder.toml"
-	supportedFile = "SUPPORTED_VERSIONS.md"
+	overlayFile = "overlay.toml"
+	lockFile    = "snapshots.json"
+	builderFile = "builder.toml"
 )
 
 func main() {
-	command := "generate"
+	var command string
 	args := os.Args[1:]
-	if len(args) > 0 && args[0] != "" && args[0][0] != '-' {
+	if len(args) > 0 {
 		command, args = args[0], args[1:]
 	}
 
@@ -45,7 +44,6 @@ func main() {
 
 func run(command string, args []string) error {
 	flags := flag.NewFlagSet("noble-builder "+command, flag.ExitOnError)
-	check := flags.Bool("check", false, "only check that the generated files are up to date")
 	verbose := flags.Bool("v", false, "log why releases are skipped when resolving")
 	lockPath := flags.String("lock", lockFile, "snapshots.json with the versions to publish")
 	version := flags.String("version", "", "version")
@@ -121,26 +119,18 @@ func run(command string, args []string) error {
 		if err := os.WriteFile(builderFile, Encode(builder), 0o644); err != nil {
 			return err
 		}
-		if err := writeJSON(lockFile, published); err != nil {
-			return err
-		}
-		return os.WriteFile(supportedFile, SupportedVersions(overlay, published), 0o644)
+		return writeJSON(lockFile, published)
 
-	case "generate":
-		lock, err := readLock(lockFile)
+	case "check":
+		tag, err := resolver.LatestRelease(overlay.Base)
 		if err != nil {
 			return err
 		}
-		if len(lock.Snapshots) == 0 {
-			return nil // nothing is published yet
-		}
-		if _, err := baseBuilder(resolver, overlay, lock.Snapshots[len(lock.Snapshots)-1].Base); err != nil {
-			return err
-		}
-		return writeSupportedVersions(overlay, lock, *check)
+		_, err = baseBuilder(resolver, overlay, tag)
+		return err
 
 	default:
-		return errors.New("usage: noble-builder [resolve|prepare|notes] [flags]")
+		return errors.New("usage: noble-builder resolve|prepare|notes|check [flags]")
 	}
 }
 
@@ -305,22 +295,6 @@ func baseBuilder(resolver *Resolver, overlay Overlay, tag string) (Builder, erro
 	}
 
 	return base, validate(base, overlay)
-}
-
-func writeSupportedVersions(overlay Overlay, lock Lock, check bool) error {
-	content := SupportedVersions(overlay, lock)
-	existing, err := os.ReadFile(supportedFile)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if bytes.Equal(existing, content) {
-		return nil
-	}
-	if check {
-		return fmt.Errorf("%s is out of date, run `go run ./cmd/noble-builder`", supportedFile)
-	}
-	fmt.Println("wrote", supportedFile)
-	return os.WriteFile(supportedFile, content, 0o644)
 }
 
 func readLock(path string) (Lock, error) {

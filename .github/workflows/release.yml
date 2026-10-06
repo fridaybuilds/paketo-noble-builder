@@ -1,8 +1,7 @@
 name: Release
 
 # Resolves the versions to publish (see `noble-builder resolve`), and publishes each one, oldest first: the builder
-# image, then a commit on main with its builder.toml, snapshots.json and SUPPORTED_VERSIONS.md, tagged with the
-# version. Then creates the GitHub releases that are missing and points the `latest` image tag at the newest version.
+# image, then a commit on main with its builder.toml and snapshots.json, tagged with the version. Then creates the GitHub releases that are missing and points the `latest` image tag at the newest version.
 
 on:
   schedule:
@@ -91,7 +90,7 @@ jobs:
           ./noble-builder prepare -lock "${RUNNER_TEMP}/snapshots.json" -version "${version}"
           pack builder create "${image}:${version}" --config builder.toml --publish
 
-          git add builder.toml snapshots.json SUPPORTED_VERSIONS.md
+          git add builder.toml snapshots.json
           git commit --quiet --message "Release ${version}"
           git pull --quiet --rebase origin main
           git tag "${version}"
