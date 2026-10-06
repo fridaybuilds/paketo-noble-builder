@@ -1,0 +1,196 @@
+description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache HTTPD, Go, Java, Java Native Image, .NET, NGINX, Node.js, PHP, Procfile, Python, and Ruby, for every language version that had a noble build"
+
+[build]
+  image = "docker.io/paketobuildpacks/ubuntu-noble-build:0.0.138"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/dotnet-core:4.12.1"
+  version = "4.12.1"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/go:4.18.0"
+  version = "4.18.0"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/java-native-image:14.12.0"
+  version = "14.12.0"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/java:22.5.0"
+  version = "22.5.0"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/nodejs:9.8.1"
+  version = "9.8.1"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/php:3.7.0"
+  version = "3.7.0"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/procfile:5.15.2"
+  version = "5.15.2"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/python:2.36.2"
+  version = "2.36.2"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/ruby:3.1.1"
+  version = "3.1.1"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/web-servers:4.14.1"
+  version = "4.14.1"
+
+[[buildpacks]]
+  uri = "docker://docker.io/paketobuildpacks/apt:0.3.0"
+  version = "0.3.0"
+
+[[buildpacks]]
+  uri = "docker://docker.io/tashows/vips-buildpack:0.0.4"
+  version = "0.0.4"
+
+[lifecycle]
+  version = "0.21.22"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "com.github.tashows.vips"
+    version = "0.0.4"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/ruby"
+    version = "3.1.1"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/dotnet-core"
+    version = "4.12.1"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/go"
+    version = "4.18.0"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "com.github.tashows.vips"
+    version = "0.0.4"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/python"
+    version = "2.36.2"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/php"
+    version = "3.7.0"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/web-servers"
+    version = "4.14.1"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/java-native-image"
+    version = "14.12.0"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/java"
+    version = "22.5.0"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "com.github.tashows.vips"
+    version = "0.0.4"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/nodejs"
+    version = "9.8.1"
+
+[[order]]
+
+  [[order.group]]
+    id = "paketo-buildpacks/apt"
+    version = "0.3.0"
+    optional = true
+
+  [[order.group]]
+    id = "paketo-buildpacks/procfile"
+    version = "5.15.2"
+
+[run]
+
+  [[run.images]]
+    image = "docker.io/paketobuildpacks/ubuntu-noble-run:latest"
+
+[stack]
+  id = "io.buildpacks.stacks.noble"
+
+[[targets]]
+  arch = "amd64"
+  os = "linux"
+
+[[targets]]
+  arch = "arm64"
+  os = "linux"
