@@ -65,6 +65,7 @@ type Overlay struct {
 	Base        string         `toml:"base"`
 	BasePath    string         `toml:"base_path"`
 	Image       string         `toml:"image"`
+	Series      string         `toml:"series"`
 	Description string         `toml:"description"`
 	Arches      []string       `toml:"arches"`
 	Stacks      []OverlayStack `toml:"stacks"`
@@ -99,8 +100,8 @@ func Generate(base Builder, overlay Overlay, snapshot *Snapshot) (Builder, error
 	}
 
 	builder, err := apply(base, overlay, versions)
-	if err != nil && snapshot != nil {
-		return Builder{}, fmt.Errorf("snapshot %s: %w", snapshot.Name, err)
+	if err != nil && snapshot != nil && snapshot.Version != "" {
+		return Builder{}, fmt.Errorf("version %s: %w", snapshot.Version, err)
 	}
 	return builder, err
 }

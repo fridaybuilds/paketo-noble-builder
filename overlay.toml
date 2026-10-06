@@ -1,19 +1,21 @@
-# What the fridaybuilds noble builders add to the Paketo noble builder.
+# What the fridaybuilds noble builder adds to the Paketo noble builder.
 #
-# The build/run images, lifecycle, targets and buildpacks come from the upstream builder.toml at the release pinned
-# in snapshots.json (`base`), which `resolve` moves to the latest upstream release.
+# The build/run images, lifecycle, targets and buildpacks come from the upstream builder.toml at the latest upstream
+# release when a version is resolved. Each version records its upstream release in snapshots.json (`base`).
 
 base = "paketo-buildpacks/ubuntu-noble-builder"
 base_path = "builders/builder/builder.toml"
 image = "docker.io/fridaybuilds/paketo-noble-builder"
+# Versions are <series>.<n>, with n increasing by one for every new version.
+series = "0.1"
 description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache HTTPD, Go, Java, Java Native Image, .NET, NGINX, Node.js, PHP, Procfile, Python, and Ruby, for every language version that had a noble build"
 
 # The upstream builder's target arches are used unless `arches` lists a subset of them. Fewer arches let older
 # releases in, since buildpacks only gained arm64 builds over time (e.g. arches = ["amd64"]).
 
-# Stacks with `track` follow the releases of their composite buildpack: `resolve` picks the fewest snapshots in time
-# that together offer every version of the tracked dependency that ever had a build for the noble stack, and each
-# snapshot is published as its own builder image.
+# Stacks with `track` follow the releases of their composite buildpack. Each version is a snapshot of the tracked
+# stacks at a point in time, and `resolve` picks them so that together they offer every version of the tracked
+# dependency that ever had a build for the noble stack.
 #
 # Stacks that are in the upstream builder can only be listed with `track`. Other stacks get their own order group at
 # `position` ("first", "last", "before:<buildpack id>" or "after:<buildpack id>"), and need either `track` or a fixed

@@ -8,18 +8,6 @@ import (
 	"strings"
 )
 
-// Revision is one immutable image of a snapshot. The release workflow keeps them in the revisions.json asset of the
-// snapshot's release.
-type Revision struct {
-	Revision   int    `json:"revision"`
-	Date       string `json:"date"`
-	Base       string `json:"base"`
-	BuildImage string `json:"build_image"`
-	Lifecycle  string `json:"lifecycle"`
-	Commit     string `json:"commit"`
-	Digest     string `json:"digest"`
-}
-
 var languageNames = map[string]string{
 	"go":     "Go",
 	"node":   "Node.js",
@@ -46,22 +34,22 @@ func languages(overlay Overlay) []string {
 	return tracked
 }
 
-// SupportedVersions renders SUPPORTED_VERSIONS.md: for every language version, the newest snapshot that has it.
+// SupportedVersions renders SUPPORTED_VERSIONS.md: for every language version, the newest builder version that has it.
 func SupportedVersions(overlay Overlay, lock Lock) []byte {
 	var buf bytes.Buffer
 	w := func(format string, args ...any) { fmt.Fprintf(&buf, format, args...) }
 
 	w("<!-- Generated from snapshots.json by `go run ./cmd/noble-builder`. DO NOT EDIT. -->\n\n")
 	w("# Supported language versions\n\n")
-	w("Each language version is listed with the newest image tag that has it, to use as\n")
-	w("`%s:<tag>`. Older patch versions are kept for apps that pin them, but upgrading to the newest patch\n", overlay.Image)
+	w("Each language version is listed with the newest builder version that has it, to use as\n")
+	w("`%s:<version>`. Older patch versions are kept for apps that pin them, but upgrading to the newest patch\n", overlay.Image)
 	w("of a minor version is recommended.\n")
 
 	for _, language := range languages(overlay) {
 		newest := map[string]string{}
 		for _, snapshot := range lock.Snapshots {
 			for _, version := range snapshot.Languages[language] {
-				newest[version] = snapshot.Name
+				newest[version] = snapshot.Version
 			}
 		}
 		if len(newest) == 0 {
@@ -72,7 +60,7 @@ func SupportedVersions(overlay Overlay, lock Lock) []byte {
 		sortVersions(versions)
 		slices.Reverse(versions)
 
-		w("\n## %s\n\n| Version | Image tag |\n| --- | --- |\n", languageName(language))
+		w("\n## %s\n\n| Version | Builder version |\n| --- | --- |\n", languageName(language))
 		for _, version := range versions {
 			w("| %s | `%s` |\n", version, newest[version])
 		}
@@ -81,19 +69,17 @@ func SupportedVersions(overlay Overlay, lock Lock) []byte {
 	return buf.Bytes()
 }
 
-// Notes renders the release notes of a snapshot. builder is the snapshot's builder as of its newest revision.
-func Notes(overlay Overlay, lock Lock, name string, builder Builder, revisions []Revision) ([]byte, error) {
-	i := slices.IndexFunc(lock.Snapshots, func(s Snapshot) bool { return s.Name == name })
-	if i < 0 {
-		return nil, fmt.Errorf("no snapshot %s", name)
-	}
+// Notes renders the release notes of lock.Snapshots[i], whose builder is builder. previous is the builder of the
+// version before it, if any.
+func Notes(overlay Overlay, lock Lock, i int, builder Builder, previous *Builder) []byte {
 	snapshot := lock.Snapshots[i]
 
 	var buf bytes.Buffer
 	w := func(format string, args ...any) { fmt.Fprintf(&buf, format, args...) }
 
-	w("Ubuntu 24.04 (Noble) builder with the Paketo language buildpacks as they were on %s.\n\n", strings.ReplaceAll(strings.Split(name, "-")[0], ".", "-"))
-	w("```bash\npack build my-app --builder %s:%s\n```\n", overlay.Image, name)
+	w("Ubuntu 24.04 (Noble) builder with the Paketo language buildpacks as of %s, based on the Paketo noble builder\n", snapshot.Date)
+	w("[%s](https://github.com/%s/releases/tag/%s).\n\n", snapshot.Base, overlay.Base, snapshot.Base)
+	w("```bash\npack build my-app --builder %s:%s\n```\n", overlay.Image, snapshot.Version)
 
 	w("\n## Language versions\n\n| Language | Versions |\n| --- | --- |\n")
 	for _, language := range languages(overlay) {
@@ -102,61 +88,105 @@ func Notes(overlay Overlay, lock Lock, name string, builder Builder, revisions [
 		}
 	}
 
-	if i == 0 {
-		w("\nThis is the first snapshot.\n")
+	if previous == nil {
+		w("\nThis is the first version.\n")
 	} else {
-		previous := lock.Snapshots[i-1]
-		w("\n### Changes since %s\n\n", previous.Name)
-		changed := false
-		for _, language := range languages(overlay) {
-			added := without(snapshot.Languages[language], previous.Languages[language])
-			dropped := without(previous.Languages[language], snapshot.Languages[language])
-			var changes []string
-			if len(added) > 0 {
-				changes = append(changes, "added "+strings.Join(added, ", "))
-			}
-			if len(dropped) > 0 {
-				changes = append(changes, "dropped "+strings.Join(dropped, ", "))
-			}
-			if len(changes) > 0 {
-				w("- **%s**: %s\n", languageName(language), strings.Join(changes, "; "))
-				changed = true
-			}
+		w("\n## Changes since %s\n\n", lock.Snapshots[i-1].Version)
+		changes := languageChanges(overlay, lock.Snapshots[i-1], snapshot)
+		changes = append(changes, builderChanges(*previous, builder)...)
+		if len(changes) == 0 {
+			changes = []string{"No changes."}
 		}
-		if !changed {
-			w("No language versions changed.\n")
+		for _, change := range changes {
+			w("- %s\n", change)
 		}
 	}
 
 	w("\n## Buildpacks\n\n| Buildpack | Version |\n| --- | --- |\n")
+	for _, entry := range buildpackVersions(builder) {
+		optional := ""
+		if entry.Optional {
+			optional = " (optional)"
+		}
+		w("| %s%s | %s |\n", entry.ID, optional, entry.Version)
+	}
+
+	w("\n## Images\n\n")
+	w("- Build image: `%s`\n", builder.Build.Image)
+	for _, image := range builder.Run.Images {
+		w("- Run image: `%s`\n", image.Image)
+	}
+	w("- Lifecycle: %s\n", builder.Lifecycle.Version)
+
+	return buf.Bytes()
+}
+
+func languageChanges(overlay Overlay, previous, snapshot Snapshot) []string {
+	var changes []string
+	for _, language := range languages(overlay) {
+		var parts []string
+		if added := without(snapshot.Languages[language], previous.Languages[language]); len(added) > 0 {
+			parts = append(parts, "added "+strings.Join(added, ", "))
+		}
+		if dropped := without(previous.Languages[language], snapshot.Languages[language]); len(dropped) > 0 {
+			parts = append(parts, "dropped "+strings.Join(dropped, ", "))
+		}
+		if len(parts) > 0 {
+			changes = append(changes, fmt.Sprintf("**%s**: %s", languageName(language), strings.Join(parts, "; ")))
+		}
+	}
+	return changes
+}
+
+func builderChanges(previous, builder Builder) []string {
+	var changes []string
+	change := func(what, from, to string) {
+		switch {
+		case from == to:
+		case from == "":
+			changes = append(changes, fmt.Sprintf("%s: added %s", what, to))
+		case to == "":
+			changes = append(changes, fmt.Sprintf("%s: removed (was %s)", what, from))
+		default:
+			changes = append(changes, fmt.Sprintf("%s: %s → %s", what, from, to))
+		}
+	}
+
+	versions := func(b Builder) map[string]string {
+		m := map[string]string{}
+		for _, entry := range buildpackVersions(b) {
+			m[entry.ID] = entry.Version
+		}
+		return m
+	}
+	before, after := versions(previous), versions(builder)
+	for _, entry := range buildpackVersions(builder) {
+		change("`"+entry.ID+"`", before[entry.ID], entry.Version)
+	}
+	for _, entry := range buildpackVersions(previous) {
+		if _, ok := after[entry.ID]; !ok {
+			change("`"+entry.ID+"`", entry.Version, "")
+		}
+	}
+
+	change("Build image", imageTag(previous.Build.Image), imageTag(builder.Build.Image))
+	change("Lifecycle", previous.Lifecycle.Version, builder.Lifecycle.Version)
+	return changes
+}
+
+// buildpackVersions returns the buildpacks of the order groups, in order of first appearance.
+func buildpackVersions(b Builder) []GroupEntry {
+	var entries []GroupEntry
 	seen := map[string]bool{}
-	for _, order := range builder.Order {
+	for _, order := range b.Order {
 		for _, entry := range order.Group {
 			if !seen[entry.ID] {
 				seen[entry.ID] = true
-				optional := ""
-				if entry.Optional {
-					optional = " (optional)"
-				}
-				w("| %s%s | %s |\n", entry.ID, optional, entry.Version)
+				entries = append(entries, entry)
 			}
 		}
 	}
-
-	if len(revisions) > 0 {
-		w("\n## Revisions\n\n")
-		w("Each revision is an immutable image tag. `%s` always points at the newest revision; it gets a new one when the\n", name)
-		w("upstream builder (build image, lifecycle, other buildpacks) or the overlay changes. The `builder-r<N>.toml`\n")
-		w("assets are the exact builder configuration of each revision.\n\n")
-		w("| Tag | Date | Upstream | Build image | Lifecycle | Digest |\n| --- | --- | --- | --- | --- | --- |\n")
-		for _, revision := range slices.Backward(revisions) {
-			w("| `%s-r%d` | %s | [%s](https://github.com/%s/releases/tag/%s) | %s | %s | `%s` |\n",
-				name, revision.Revision, revision.Date, revision.Base, overlay.Base, revision.Base,
-				imageTag(revision.BuildImage), revision.Lifecycle, revision.Digest)
-		}
-	}
-
-	return buf.Bytes(), nil
+	return entries
 }
 
 func without(versions, others []string) []string {

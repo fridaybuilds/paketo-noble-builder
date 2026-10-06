@@ -15,7 +15,7 @@ func TestNobleBuilder(t *testing.T) {
 	suite := spec.New("noble-builder", spec.Report(report.Terminal{}))
 	suite("Generate", testGenerate)
 	suite("Docs", testDocs)
-	suite("Snapshots", testSnapshots)
+	suite("Versions", testVersions)
 	suite("Resolver", testResolver)
 	suite.Run(t)
 }
@@ -53,6 +53,7 @@ func testOverlay() Overlay {
 	return Overlay{
 		Base:        "paketo-buildpacks/ubuntu-noble-builder",
 		Image:       "docker.io/fridaybuilds/paketo-noble-builder",
+		Series:      "0.1",
 		Description: "fridaybuilds",
 		Stacks: []OverlayStack{
 			{ID: "ruby", Image: "docker.io/ruby", Track: "ruby"},
@@ -78,7 +79,7 @@ func testGenerate(t *testing.T, context spec.G, it spec.S) {
 	it.Before(func() {
 		base = testBase()
 		overlay = testOverlay()
-		snapshot = Snapshot{Name: "2026.02.01", Buildpacks: map[string]string{"ruby": "2.2.0", "nodejs": "2.2.0"}}
+		snapshot = Snapshot{Version: "0.1.1", Buildpacks: map[string]string{"ruby": "2.2.0", "nodejs": "2.2.0"}}
 	})
 
 	it("switches the tracked stacks to the snapshot's versions", func() {
@@ -191,182 +192,160 @@ func testDocs(t *testing.T, context spec.G, it spec.S) {
 
 		overlay = testOverlay()
 		lock    = Lock{
-			Base: "v0.0.203",
 			Snapshots: []Snapshot{
-				{Name: "2026.01.01", Buildpacks: map[string]string{"ruby": "2.1.0"}, Languages: map[string][]string{"ruby": {"3.3.0", "3.4.0"}}},
-				{Name: "2026.02.01", Buildpacks: map[string]string{"ruby": "2.2.0", "nodejs": "2.2.0"}, Languages: map[string][]string{"ruby": {"3.4.0", "3.4.1"}, "node": {"22.1.0"}}},
+				{Version: "0.1.0", Date: "2026-01-01", Base: "v0.0.200", Buildpacks: map[string]string{"ruby": "2.1.0"}, Languages: map[string][]string{"ruby": {"3.3.0", "3.4.0"}}},
+				{Version: "0.1.1", Date: "2026-02-01", Base: "v0.0.203", Buildpacks: map[string]string{"ruby": "2.2.0", "nodejs": "2.2.0"}, Languages: map[string][]string{"ruby": {"3.4.0", "3.4.1"}, "node": {"22.1.0"}}},
 			},
 		}
 	)
 
-	it("lists every language version with the newest snapshot that has it", func() {
+	it("lists every language version with the newest builder version that has it", func() {
 		docs := string(SupportedVersions(overlay, lock))
 
-		Expect(docs).To(ContainSubstring("## Ruby\n\n| Version | Image tag |\n| --- | --- |\n| 3.4.1 | `2026.02.01` |\n| 3.4.0 | `2026.02.01` |\n| 3.3.0 | `2026.01.01` |\n"))
-		Expect(docs).To(ContainSubstring("## Node.js\n\n| Version | Image tag |\n| --- | --- |\n| 22.1.0 | `2026.02.01` |\n"))
+		Expect(docs).To(ContainSubstring("## Ruby\n\n| Version | Builder version |\n| --- | --- |\n| 3.4.1 | `0.1.1` |\n| 3.4.0 | `0.1.1` |\n| 3.3.0 | `0.1.0` |\n"))
+		Expect(docs).To(ContainSubstring("## Node.js\n\n| Version | Builder version |\n| --- | --- |\n| 22.1.0 | `0.1.1` |\n"))
 		Expect(strings.Index(docs, "## Ruby")).To(BeNumerically("<", strings.Index(docs, "## Node.js")))
 	})
 
 	context("Notes", func() {
-		var builder Builder
+		var builder, previous Builder
 
 		it.Before(func() {
 			var err error
+			previous, err = Generate(testBase(), overlay, &lock.Snapshots[0])
+			Expect(err).NotTo(HaveOccurred())
 			builder, err = Generate(testBase(), overlay, &lock.Snapshots[1])
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		it("lists the language versions, the changes and the buildpacks", func() {
-			notes, err := Notes(overlay, lock, "2026.02.01", builder, nil)
-			Expect(err).NotTo(HaveOccurred())
+		it("describes the version", func() {
+			notes := string(Notes(overlay, lock, 1, builder, &previous))
 
-			Expect(string(notes)).To(ContainSubstring("--builder docker.io/fridaybuilds/paketo-noble-builder:2026.02.01"))
-			Expect(string(notes)).To(ContainSubstring("| Ruby | 3.4.0, 3.4.1 |\n| Node.js | 22.1.0 |\n"))
-			Expect(string(notes)).To(ContainSubstring("### Changes since 2026.01.01\n\n- **Ruby**: added 3.4.1; dropped 3.3.0\n- **Node.js**: added 22.1.0\n"))
-			Expect(string(notes)).To(ContainSubstring("| apt (optional) | 0.3.0 |\n| vips (optional) | 0.0.4 |\n| ruby | 2.2.0 |\n"))
-			Expect(string(notes)).NotTo(ContainSubstring("## Revisions"))
+			Expect(notes).To(ContainSubstring("buildpacks as of 2026-02-01, based on the Paketo noble builder\n[v0.0.203](https://github.com/paketo-buildpacks/ubuntu-noble-builder/releases/tag/v0.0.203)"))
+			Expect(notes).To(ContainSubstring("--builder docker.io/fridaybuilds/paketo-noble-builder:0.1.1"))
+			Expect(notes).To(ContainSubstring("| Ruby | 3.4.0, 3.4.1 |\n| Node.js | 22.1.0 |\n"))
+			Expect(notes).To(ContainSubstring("| apt (optional) | 0.3.0 |\n| vips (optional) | 0.0.4 |\n| ruby | 2.2.0 |\n"))
 		})
 
-		it("lists the revisions newest first", func() {
-			revisions := []Revision{
-				{Revision: 1, Date: "2026-02-01", Base: "v0.0.200", BuildImage: "docker.io/build:0.0.130", Lifecycle: "0.21.20", Digest: "sha256:aaa"},
-				{Revision: 2, Date: "2026-02-08", Base: "v0.0.203", BuildImage: "docker.io/build:0.0.138", Lifecycle: "0.21.22", Digest: "sha256:bbb"},
-			}
+		it("lists the language and builder changes since the previous version", func() {
+			previous.Build.Image = "docker.io/build:0.0.130"
+			builder.Build.Image = "docker.io/build:0.0.138"
 
-			notes, err := Notes(overlay, lock, "2026.02.01", builder, revisions)
-			Expect(err).NotTo(HaveOccurred())
+			notes := string(Notes(overlay, lock, 1, builder, &previous))
 
-			Expect(string(notes)).To(ContainSubstring(
-				"| `2026.02.01-r2` | 2026-02-08 | [v0.0.203](https://github.com/paketo-buildpacks/ubuntu-noble-builder/releases/tag/v0.0.203) | 0.0.138 | 0.21.22 | `sha256:bbb` |\n" +
-					"| `2026.02.01-r1` | 2026-02-01 |"))
+			Expect(notes).To(ContainSubstring("## Changes since 0.1.0\n\n" +
+				"- **Ruby**: added 3.4.1; dropped 3.3.0\n" +
+				"- **Node.js**: added 22.1.0\n" +
+				"- `ruby`: 2.1.0 → 2.2.0\n" +
+				"- `nodejs`: 2.0.0 → 2.2.0\n" +
+				"- Build image: 0.0.130 → 0.0.138\n"))
 		})
 
-		it("says so for the first snapshot", func() {
-			notes, err := Notes(overlay, lock, "2026.01.01", builder, nil)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(notes)).To(ContainSubstring("This is the first snapshot."))
+		it("says when nothing changed", func() {
+			notes := string(Notes(overlay, lock, 1, builder, &builder))
+
+			Expect(notes).To(ContainSubstring("- **Ruby**"))
+			Expect(notes).NotTo(ContainSubstring("`ruby`: "))
 		})
 
-		it("fails for an unknown snapshot", func() {
-			_, err := Notes(overlay, lock, "2025.01.01", builder, nil)
-			Expect(err).To(MatchError("no snapshot 2025.01.01"))
+		it("says so for the first version", func() {
+			notes := string(Notes(overlay, lock, 0, previous, nil))
+			Expect(notes).To(ContainSubstring("This is the first version."))
 		})
 	})
 }
 
-func testSnapshots(t *testing.T, context spec.G, it spec.S) {
+func testVersions(t *testing.T, context spec.G, it spec.S) {
 	var Expect = NewWithT(t).Expect
 
 	day := func(d int) time.Time { return time.Date(2026, 1, d, 12, 0, 0, 0, time.UTC) }
 	tracks := map[string]string{"ruby": "ruby", "nodejs": "node"}
 
-	it("picks the fewest points that cover every language version", func() {
-		// ruby 3.3.0 is available on days 1-2, 3.3.1 on days 2-4, 3.3.2 from day 3 and 3.4.0 from day 4.
-		// node 20.0.0 is available on days 1-4, 22.0.0 from day 5.
-		stacks := map[string][]StackRelease{
-			"ruby": {
-				{Version: "1.0.0", Published: day(1), Languages: []string{"3.3.0"}},
-				{Version: "1.1.0", Published: day(2), Languages: []string{"3.3.0", "3.3.1"}},
-				{Version: "1.2.0", Published: day(3), Languages: []string{"3.3.1", "3.3.2"}},
-				{Version: "1.3.0", Published: day(4), Languages: []string{"3.3.1", "3.3.2", "3.4.0"}},
-				{Version: "1.4.0", Published: day(6), Languages: []string{"3.3.2", "3.4.0"}},
-			},
-			"nodejs": {
-				{Version: "5.0.0", Published: day(1), Languages: []string{"20.0.0"}},
-				{Version: "5.1.0", Published: day(5), Languages: []string{"22.0.0"}},
-			},
-		}
+	// ruby 3.3.0 is available on days 1-2, 3.3.1 on days 2-4, 3.3.2 from day 3 and 3.4.0 from day 4.
+	// node 20.0.0 is available on days 1-4, 22.0.0 from day 5.
+	stacks := map[string][]StackRelease{
+		"ruby": {
+			{Version: "1.0.0", Published: day(1), Languages: []string{"3.3.0"}},
+			{Version: "1.1.0", Published: day(2), Languages: []string{"3.3.0", "3.3.1"}},
+			{Version: "1.2.0", Published: day(3), Languages: []string{"3.3.1", "3.3.2"}},
+			{Version: "1.3.0", Published: day(4), Languages: []string{"3.3.1", "3.3.2", "3.4.0"}},
+			{Version: "1.4.0", Published: day(6), Languages: []string{"3.3.2", "3.4.0"}},
+		},
+		"nodejs": {
+			{Version: "5.0.0", Published: day(1), Languages: []string{"20.0.0"}},
+			{Version: "5.1.0", Published: day(5), Languages: []string{"22.0.0"}},
+		},
+	}
 
-		snapshots := Snapshots(stacks, tracks)
+	context("Timeline", func() {
+		it("returns the latest release of every stack after each release", func() {
+			states := Timeline(stacks, tracks)
 
-		// day 2 covers ruby 3.3.0 before 1.2.0 drops it, and with it ruby 3.3.1 and node 20.0.0. day 6 is the
-		// current state, which covers the rest.
-		Expect(snapshots).To(Equal([]Snapshot{
-			{Name: "2026.01.02", Buildpacks: map[string]string{"ruby": "1.1.0", "nodejs": "5.0.0"}, Languages: map[string][]string{"ruby": {"3.3.0", "3.3.1"}, "node": {"20.0.0"}}},
-			{Name: "2026.01.06", Buildpacks: map[string]string{"ruby": "1.4.0", "nodejs": "5.1.0"}, Languages: map[string][]string{"ruby": {"3.3.2", "3.4.0"}, "node": {"22.0.0"}}},
-		}))
-	})
-
-	it("keeps earlier snapshots when new releases come out", func() {
-		stacks := map[string][]StackRelease{
-			"ruby": {
-				{Version: "1.0.0", Published: day(1), Languages: []string{"3.3.0"}},
-				{Version: "1.1.0", Published: day(2), Languages: []string{"3.3.1"}},
-			},
-		}
-		before := Snapshots(stacks, tracks)
-
-		stacks["ruby"] = append(stacks["ruby"], StackRelease{Version: "1.2.0", Published: day(3), Languages: []string{"3.3.1"}})
-		after := Snapshots(stacks, tracks)
-
-		Expect(after[0]).To(Equal(before[0]))
-		Expect(after[len(after)-1].Buildpacks["ruby"]).To(Equal("1.2.0"))
-	})
-
-	it("counts a version that comes back as a separate stretch", func() {
-		stacks := map[string][]StackRelease{
-			"ruby": {
-				{Version: "1.0.0", Published: day(1), Languages: []string{"3.3.0"}},
-				{Version: "1.1.0", Published: day(2), Languages: []string{"3.4.0"}},
-				{Version: "1.2.0", Published: day(3), Languages: []string{"3.3.0"}},
-			},
-		}
-
-		var names []string
-		for _, snapshot := range Snapshots(stacks, tracks) {
-			names = append(names, snapshot.Name)
-		}
-		Expect(names).To(Equal([]string{"2026.01.01", "2026.01.02", "2026.01.03"}))
-	})
-
-	it("suffixes snapshots picked on the same day", func() {
-		morning, evening := day(1), day(1).Add(6*time.Hour)
-		stacks := map[string][]StackRelease{
-			"ruby": {
-				{Version: "1.0.0", Published: morning, Languages: []string{"3.3.0"}},
-				{Version: "1.1.0", Published: evening, Languages: []string{"3.4.0"}},
-			},
-		}
-
-		snapshots := Snapshots(stacks, tracks)
-		Expect(snapshots[0].Name).To(Equal("2026.01.01"))
-		Expect(snapshots[1].Name).To(Equal("2026.01.01-2"))
-	})
-
-	it("returns nothing without releases", func() {
-		Expect(Snapshots(nil, tracks)).To(BeEmpty())
-	})
-
-	context("MergeSnapshots", func() {
-		snapshot := func(name, version string) Snapshot {
-			return Snapshot{Name: name, Buildpacks: map[string]string{"ruby": version}}
-		}
-
-		it("keeps previous snapshots and adds the newly picked ones in date order", func() {
-			previous := []Snapshot{snapshot("2026.01.01", "1.0.0"), snapshot("2026.01.05", "1.1.0")}
-			picked := []Snapshot{snapshot("2026.01.03", "1.0.5"), snapshot("2026.01.09", "1.2.0")}
-
-			var names []string
-			for _, s := range MergeSnapshots(previous, picked) {
-				names = append(names, s.Name)
-			}
-			Expect(names).To(Equal([]string{"2026.01.01", "2026.01.03", "2026.01.09"}))
-		})
-
-		it("keeps the previous newest snapshot when it's picked again", func() {
-			previous := []Snapshot{snapshot("2026.01.01", "1.0.0"), snapshot("2026.01.05", "1.1.0")}
-			picked := []Snapshot{snapshot("2026.01.05", "1.1.0"), snapshot("2026.01.09", "1.2.0")}
-
-			Expect(MergeSnapshots(previous, picked)).To(Equal([]Snapshot{
-				snapshot("2026.01.01", "1.0.0"), snapshot("2026.01.05", "1.1.0"), snapshot("2026.01.09", "1.2.0"),
+			Expect(states).To(HaveLen(7))
+			Expect(states[1]).To(Equal(State{
+				Date:       day(1),
+				Buildpacks: map[string]string{"ruby": "1.0.0", "nodejs": "5.0.0"},
+				Languages:  map[string][]string{"ruby": {"3.3.0"}, "node": {"20.0.0"}},
 			}))
+			Expect(states[6].Buildpacks).To(Equal(map[string]string{"ruby": "1.4.0", "nodejs": "5.1.0"}))
 		})
 
-		it("prefers previous snapshots over picked ones with the same name", func() {
-			previous := []Snapshot{snapshot("2026.01.01", "1.0.0"), snapshot("2026.01.05", "1.1.0")}
-			picked := []Snapshot{snapshot("2026.01.01", "0.9.0"), snapshot("2026.01.09", "1.2.0")}
+		it("returns nothing without releases", func() {
+			Expect(Timeline(nil, tracks)).To(BeEmpty())
+		})
+	})
 
-			Expect(MergeSnapshots(previous, picked)[0]).To(Equal(snapshot("2026.01.01", "1.0.0")))
+	context("PickStates", func() {
+		it("picks the fewest states that offer every language version", func() {
+			states := Timeline(stacks, tracks)
+
+			// day 2 offers ruby 3.3.0 before it is dropped, and with it 3.3.1 and node 20.0.0. The last state offers
+			// the rest.
+			picked := PickStates(states, map[string]bool{})
+			Expect(picked).To(Equal([]int{2, 6}))
+			Expect(states[2].Buildpacks).To(Equal(map[string]string{"ruby": "1.1.0", "nodejs": "5.0.0"}))
+		})
+
+		it("only picks states for the versions that aren't covered yet", func() {
+			states := Timeline(stacks, tracks)
+
+			covered := map[string]bool{"ruby@3.3.0": true, "ruby@3.3.1": true, "node@20.0.0": true}
+			Expect(PickStates(states, covered)).To(Equal([]int{6}))
+
+			for _, state := range states {
+				for language, versions := range state.Languages {
+					for _, version := range versions {
+						covered[language+"@"+version] = true
+					}
+				}
+			}
+			Expect(PickStates(states, covered)).To(BeEmpty())
+		})
+
+		it("counts a version that comes back as a separate stretch", func() {
+			states := Timeline(map[string][]StackRelease{
+				"ruby": {
+					{Version: "1.0.0", Published: day(1), Languages: []string{"3.3.0"}},
+					{Version: "1.1.0", Published: day(2), Languages: []string{"3.4.0"}},
+					{Version: "1.2.0", Published: day(3), Languages: []string{"3.3.0"}},
+				},
+			}, tracks)
+
+			Expect(PickStates(states, map[string]bool{})).To(Equal([]int{0, 1, 2}))
+		})
+	})
+
+	context("NextVersion", func() {
+		it("starts the series at .0", func() {
+			Expect(NextVersion("0.1", nil)).To(Equal("0.1.0"))
+		})
+
+		it("increments the last number", func() {
+			Expect(NextVersion("0.1", []Snapshot{{Version: "0.1.0"}, {Version: "0.1.9"}})).To(Equal("0.1.10"))
+		})
+
+		it("starts a new series at .0", func() {
+			Expect(NextVersion("0.2", []Snapshot{{Version: "0.1.12"}})).To(Equal("0.2.0"))
 		})
 	})
 }

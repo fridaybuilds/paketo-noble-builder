@@ -18,18 +18,26 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Lock is snapshots.json: the upstream release the builders are based on, and the snapshots.
+// Lock is snapshots.json: every published snapshot, oldest first.
 type Lock struct {
-	Base      string     `json:"base"`
 	Snapshots []Snapshot `json:"snapshots"`
 }
 
-// Snapshot is one generated builder: the version of every tracked stack as it was at a point in time, and the
-// language versions those provide on the base stack.
+// Snapshot is one published builder version: the upstream builder release it is based on, the versions of the
+// tracked stacks as they were on Date, and the language versions those provide on the base stack.
 type Snapshot struct {
-	Name       string              `json:"name"`
+	Version    string              `json:"version"`
+	Date       string              `json:"date"`
+	Base       string              `json:"base"`
 	Buildpacks map[string]string   `json:"buildpacks"`
 	Languages  map[string][]string `json:"languages"`
+}
+
+// State is the latest release of every tracked stack at a point in time.
+type State struct {
+	Date       time.Time
+	Buildpacks map[string]string
+	Languages  map[string][]string
 }
 
 // StackRelease is a release of a tracked composite buildpack and the language versions it supports on the base stack.
@@ -492,15 +500,8 @@ func (r *Resolver) logf(format string, args ...any) {
 	}
 }
 
-// Snapshots picks the fewest points in time at which every language version of every stack was available, and
-// returns the stack versions at each of those points, oldest first.
-//
-// Over time each stack's latest release changes, and with it the language versions on offer. Each language version
-// is available for one or more contiguous stretches of that timeline. Picking a point at the end of the earliest
-// ending stretch that isn't covered yet, until all are, gives the fewest points (interval stabbing). The points only
-// depend on stretches that already ended, so they don't move when new releases come out. The last point is always
-// the current state, which covers everything still available.
-func Snapshots(stacks map[string][]StackRelease, tracks map[string]string) []Snapshot {
+// Timeline returns the state after each release of the tracked stacks, oldest first.
+func Timeline(stacks map[string][]StackRelease, tracks map[string]string) []State {
 	type event struct {
 		stack   string
 		release StackRelease
@@ -511,9 +512,6 @@ func Snapshots(stacks map[string][]StackRelease, tracks map[string]string) []Sna
 			events = append(events, event{stack, release})
 		}
 	}
-	if len(events) == 0 {
-		return nil
-	}
 	sort.SliceStable(events, func(i, j int) bool {
 		if !events[i].release.Published.Equal(events[j].release.Published) {
 			return events[i].release.Published.Before(events[j].release.Published)
@@ -521,23 +519,40 @@ func Snapshots(stacks map[string][]StackRelease, tracks map[string]string) []Sna
 		return events[i].stack < events[j].stack
 	})
 
-	// states[i] is the latest release of every stack after event i.
-	states := make([]map[string]StackRelease, len(events))
+	var states []State
 	current := map[string]StackRelease{}
-	for i, e := range events {
+	for _, e := range events {
 		current = maps.Clone(current)
 		current[e.stack] = e.release
-		states[i] = current
-	}
 
+		state := State{Date: e.release.Published, Buildpacks: map[string]string{}, Languages: map[string][]string{}}
+		for stack, release := range current {
+			state.Buildpacks[stack] = release.Version
+			state.Languages[tracks[stack]] = release.Languages
+		}
+		states = append(states, state)
+	}
+	return states
+}
+
+// PickStates returns the indexes of the fewest states that offer every language version that isn't covered yet,
+// oldest first.
+//
+// Each language version is available for one or more contiguous stretches of the timeline. Picking the end of the
+// earliest ending stretch that isn't offered by a picked state yet, until all are, gives the fewest states (interval
+// stabbing). Stretches that are still open end at the last state, so it is picked whenever a version that isn't
+// covered yet is available now.
+func PickStates(states []State, covered map[string]bool) []int {
 	type stretch struct{ start, end int }
 	var stretches []stretch
 	open := map[string]int{}
 	for i, state := range states {
 		available := map[string]bool{}
-		for stack, release := range state {
-			for _, version := range release.Languages {
-				available[tracks[stack]+"@"+version] = true
+		for language, versions := range state.Languages {
+			for _, version := range versions {
+				if key := language + "@" + version; !covered[key] {
+					available[key] = true
+				}
 			}
 		}
 		for key, start := range open {
@@ -557,7 +572,7 @@ func Snapshots(stacks map[string][]StackRelease, tracks map[string]string) []Sna
 	}
 
 	sort.Slice(stretches, func(i, j int) bool { return stretches[i].end < stretches[j].end })
-	picked := []int{}
+	var picked []int
 	last := -1
 	for _, s := range stretches {
 		if s.start > last {
@@ -565,51 +580,21 @@ func Snapshots(stacks map[string][]StackRelease, tracks map[string]string) []Sna
 			picked = append(picked, last)
 		}
 	}
-	if len(picked) == 0 || picked[len(picked)-1] != len(states)-1 {
-		picked = append(picked, len(states)-1)
-	}
-
-	var snapshots []Snapshot
-	names := map[string]int{}
-	for _, i := range picked {
-		name := events[i].release.Published.UTC().Format("2006.01.02")
-		names[name]++
-		if names[name] > 1 {
-			name = fmt.Sprintf("%s-%d", name, names[name])
-		}
-
-		snapshot := Snapshot{Name: name, Buildpacks: map[string]string{}, Languages: map[string][]string{}}
-		for stack, release := range states[i] {
-			snapshot.Buildpacks[stack] = release.Version
-			snapshot.Languages[tracks[stack]] = release.Languages
-		}
-		snapshots = append(snapshots, snapshot)
-	}
-
-	return snapshots
+	return picked
 }
 
-// MergeSnapshots keeps the previously picked snapshots, so published tags keep their meaning even if the release
-// history or the compatibility checks change. The previous newest snapshot was the state of that moment rather than
-// a picked point, so it's only kept if it's picked again. Snapshots are sorted by name, which sorts by date.
-func MergeSnapshots(previous, picked []Snapshot) []Snapshot {
-	merged := map[string]Snapshot{}
-	for i, snapshot := range previous {
-		if i < len(previous)-1 {
-			merged[snapshot.Name] = snapshot
-		}
+// NextVersion returns the version after the newest snapshot: the next patch of the series, or its first one.
+func NextVersion(series string, snapshots []Snapshot) string {
+	if len(snapshots) == 0 {
+		return series + ".0"
 	}
-	for _, snapshot := range picked {
-		if _, ok := merged[snapshot.Name]; !ok {
-			merged[snapshot.Name] = snapshot
-		}
+	patch, ok := strings.CutPrefix(snapshots[len(snapshots)-1].Version, series+".")
+	if !ok {
+		return series + ".0"
 	}
-
-	var snapshots []Snapshot
-	for _, name := range slices.Sorted(maps.Keys(merged)) {
-		snapshots = append(snapshots, merged[name])
-	}
-	return snapshots
+	var n int
+	fmt.Sscanf(patch, "%d", &n)
+	return fmt.Sprintf("%s.%d", series, n+1)
 }
 
 func sortVersions(versions []string) {
