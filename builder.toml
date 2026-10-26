@@ -1,7 +1,7 @@
 description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache HTTPD, Go, Java, Java Native Image, .NET, NGINX, Node.js, PHP, Procfile, Python, and Ruby, for every language version that had a noble build"
 
 [build]
-  image = "docker.io/paketobuildpacks/ubuntu-noble-build:0.0.150"
+  image = "docker.io/paketobuildpacks/ubuntu-noble-build:0.0.151"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/dotnet-core:4.13.0"
@@ -12,12 +12,12 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
   version = "4.23.1"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/java-native-image:14.14.1"
-  version = "14.14.1"
+  uri = "docker://docker.io/paketobuildpacks/java-native-image:14.14.2"
+  version = "14.14.2"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/java:22.7.1"
-  version = "22.7.1"
+  uri = "docker://docker.io/paketobuildpacks/java:22.7.2"
+  version = "22.7.2"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/nodejs:10.14.1"
@@ -139,7 +139,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/java-native-image"
-    version = "14.14.1"
+    version = "14.14.2"
 
 [[order]]
 
@@ -150,7 +150,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/java"
-    version = "22.7.1"
+    version = "22.7.2"
 
 [[order]]
 
