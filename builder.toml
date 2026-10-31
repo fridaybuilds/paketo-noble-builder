@@ -4,20 +4,20 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
   image = "docker.io/paketobuildpacks/ubuntu-noble-build:0.0.153"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/dotnet-core:4.13.1"
-  version = "4.13.1"
+  uri = "docker://docker.io/paketobuildpacks/dotnet-core:4.14.0"
+  version = "4.14.0"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/go:4.23.2"
   version = "4.23.2"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/java-native-image:14.14.2"
-  version = "14.14.2"
+  uri = "docker://docker.io/paketobuildpacks/java-native-image:14.14.3"
+  version = "14.14.3"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/java:22.7.2"
-  version = "22.7.2"
+  uri = "docker://docker.io/paketobuildpacks/java:22.7.3"
+  version = "22.7.3"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/nodejs:10.14.2"
@@ -40,8 +40,8 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
   version = "3.3.0"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/web-servers:4.15.0"
-  version = "4.15.0"
+  uri = "docker://docker.io/paketobuildpacks/web-servers:4.15.1"
+  version = "4.15.1"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/apt:0.3.0"
@@ -79,7 +79,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/dotnet-core"
-    version = "4.13.1"
+    version = "4.14.0"
 
 [[order]]
 
@@ -128,7 +128,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/web-servers"
-    version = "4.15.0"
+    version = "4.15.1"
 
 [[order]]
 
@@ -139,7 +139,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/java-native-image"
-    version = "14.14.2"
+    version = "14.14.3"
 
 [[order]]
 
@@ -150,7 +150,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/java"
-    version = "22.7.2"
+    version = "22.7.3"
 
 [[order]]
 
