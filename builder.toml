@@ -1,7 +1,7 @@
 description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache HTTPD, Go, Java, Java Native Image, .NET, NGINX, Node.js, PHP, Procfile, Python, and Ruby, for every language version that had a noble build"
 
 [build]
-  image = "docker.io/paketobuildpacks/ubuntu-noble-build:0.0.160"
+  image = "docker.io/paketobuildpacks/ubuntu-noble-build:0.0.161"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/dotnet-core:4.15.1"
@@ -16,8 +16,8 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
   version = "14.15.0"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/java:22.9.0"
-  version = "22.9.0"
+  uri = "docker://docker.io/paketobuildpacks/java:22.9.1"
+  version = "22.9.1"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/nodejs:10.16.0"
@@ -28,16 +28,16 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
   version = "3.8.1"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/procfile:5.15.8"
-  version = "5.15.8"
+  uri = "docker://docker.io/paketobuildpacks/procfile:5.15.9"
+  version = "5.15.9"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/python:2.69.0"
   version = "2.69.0"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/ruby:3.4.1"
-  version = "3.4.1"
+  uri = "docker://docker.io/paketobuildpacks/ruby:3.5.0"
+  version = "3.5.0"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/web-servers:4.16.1"
@@ -68,7 +68,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/ruby"
-    version = "3.4.1"
+    version = "3.5.0"
 
 [[order]]
 
@@ -150,7 +150,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/java"
-    version = "22.9.0"
+    version = "22.9.1"
 
 [[order]]
 
@@ -177,7 +177,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/procfile"
-    version = "5.15.8"
+    version = "5.15.9"
 
 [run]
 
