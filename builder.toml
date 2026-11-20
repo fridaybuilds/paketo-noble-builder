@@ -1,15 +1,15 @@
 description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache HTTPD, Go, Java, Java Native Image, .NET, NGINX, Node.js, PHP, Procfile, Python, and Ruby, for every language version that had a noble build"
 
 [build]
-  image = "docker.io/paketobuildpacks/ubuntu-noble-build:0.0.161"
+  image = "docker.io/paketobuildpacks/ubuntu-noble-build:0.0.162"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/dotnet-core:4.15.1"
   version = "4.15.1"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/go:4.23.4"
-  version = "4.23.4"
+  uri = "docker://docker.io/paketobuildpacks/go:4.23.5"
+  version = "4.23.5"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/java-native-image:14.15.0"
@@ -20,28 +20,28 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
   version = "22.9.1"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/nodejs:10.16.0"
-  version = "10.16.0"
+  uri = "docker://docker.io/paketobuildpacks/nodejs:10.17.0"
+  version = "10.17.0"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/php:3.8.1"
-  version = "3.8.1"
+  uri = "docker://docker.io/paketobuildpacks/php:3.8.2"
+  version = "3.8.2"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/procfile:5.15.9"
   version = "5.15.9"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/python:2.69.0"
-  version = "2.69.0"
+  uri = "docker://docker.io/paketobuildpacks/python:2.70.0"
+  version = "2.70.0"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/ruby:3.5.0"
-  version = "3.5.0"
+  uri = "docker://docker.io/paketobuildpacks/ruby:3.5.1"
+  version = "3.5.1"
 
 [[buildpacks]]
-  uri = "docker://docker.io/paketobuildpacks/web-servers:4.16.1"
-  version = "4.16.1"
+  uri = "docker://docker.io/paketobuildpacks/web-servers:4.16.2"
+  version = "4.16.2"
 
 [[buildpacks]]
   uri = "docker://docker.io/paketobuildpacks/apt:0.3.0"
@@ -68,7 +68,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/ruby"
-    version = "3.5.0"
+    version = "3.5.1"
 
 [[order]]
 
@@ -90,7 +90,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/go"
-    version = "4.23.4"
+    version = "4.23.5"
 
 [[order]]
 
@@ -106,7 +106,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/python"
-    version = "2.69.0"
+    version = "2.70.0"
 
 [[order]]
 
@@ -117,7 +117,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/php"
-    version = "3.8.1"
+    version = "3.8.2"
 
 [[order]]
 
@@ -128,7 +128,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/web-servers"
-    version = "4.16.1"
+    version = "4.16.2"
 
 [[order]]
 
@@ -166,7 +166,7 @@ description = "Ubuntu 24.04 Noble Numbat base image with buildpacks for Apache H
 
   [[order.group]]
     id = "paketo-buildpacks/nodejs"
-    version = "10.16.0"
+    version = "10.17.0"
 
 [[order]]
 
